@@ -1,0 +1,20 @@
+2
+4
+5
+4
+6
+4
+1
+2
+-1
+1
+0
+1
+24
+6
+1
+2
+
+
+
+Example 3.3-1 from Taha Operations Research 8ed page 93
