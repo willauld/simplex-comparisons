@@ -24,27 +24,28 @@ const (
 // Simplex method here reliese on b>=0 (does not use artificial variable
 // to overcome negitive b[i]). The daul simplex seems to need negitive b[i]
 func main() {
-	var T tableau
+	var T modernTableau
 	var f *os.File
 	var err error
-	//*
-	//f = os.Stdin
-	//f, err = os.Open("expl_1.txt")
-	//f, err = os.Open("expl_2.txt")
-	f, err = os.Open("expl_4.txt")
-	if err != nil {
-		log.Fatal(err)
-	}
-	T = loaddata(f)
-	dodual(T, f)
-	/* /
+	/*
+		//f = os.Stdin
+		//f, err = os.Open("expl_1.txt")
+		//f, err = os.Open("expl_2.txt")
+		f, err = os.Open("expl_4.txt")
+		if err != nil {
+			log.Fatal(err)
+		}
+		T = loaddata(f)
+		dodual(T, f)
+	*/
 	//f = os.Stdin
 	f, err = os.Open("expl_3.txt")
+	//f, err = os.Open("expl_5.txt")
 	if err != nil {
 		log.Fatal(err)
 	}
 	T = loaddata(f)
 	dosimplex(T, f)
-	*/
+	//*/
 
 }

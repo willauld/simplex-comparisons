@@ -17,7 +17,7 @@ func dodual(T tableau, f *os.File) {
 	var maxratiomaxpos int /* Stores the minimum valued position of
 	   b[i]/a[i][j] i.e. going out variable */
 	//var key float64  /* Stores the key element */
-	var gooutcol int /* Stores the column number which goes out */
+	var gooutVar int /* Stores the var column number which goes out */
 	var incomingcol int
 	var z float64 /* Stores the value of the objective function */
 	var i int     /* Loop variables */
@@ -44,15 +44,14 @@ func dodual(T tableau, f *os.File) {
 		}
 
 		z = 0
-		calctemp(T.temp, T.A, T.c, T.basic, T.n, T.m)
-		fmt.Printf("\n")
+		calctemp(T)
 
 		display(T)
 
-		/*** Determining the outgoing column ***/
+		/*** Determining the outgoing variable ***/
 
 		minimum(T.b, &bminpos, T.m) // TODO FIXME bminpos should only return a value if it is strictly negative; because we didn't terminate above this will do so
-		gooutcol = T.basic[bminpos]
+		gooutVar = T.basic[bminpos]
 
 		/*** Determining the incoming column ***/
 
@@ -77,7 +76,7 @@ func dodual(T tableau, f *os.File) {
 			z = z + T.c[i]*T.x[i]
 		}
 		fmt.Printf("Max(z) = %g\n", z)
-		fmt.Printf("Outgoing variable = X%d\n", gooutcol+1)
+		fmt.Printf("Outgoing variable = X%d\n", gooutVar+1)
 		fmt.Printf("Incoming in variable = X%d\n", incomingcol+1)
 
 		/*** Changing the basic and non-basic variable ***/

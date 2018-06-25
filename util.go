@@ -17,9 +17,25 @@ type tableau struct {
 	basic    []int
 	n, m, nm int
 }
+type modernTableau struct {
+	Mat [][]float64 // (m+1) x (nm +1) matrix
+	// columns + 1 for RHS / bi values
+	// row + 1 for object function
+	basic []int // m basic variables
+	n     int   // number of variable given
+	m     int   // number of constraints given
+	nm    int   // number of variables including slack / surplus variables
+}
 
-func loaddata(f *os.File) (T tableau) {
+func (m modernTableau) c(index int) float64 {
+	// TODO convert the current tableau to single matrix
+	// with access methods for convienience and readability
+	return 0.0
+}
+
+func loaddata(f *os.File) (Tab modernTableau) {
 	var i, j int
+	var T tableau
 
 	waitforuser := false
 	if f == os.Stdin {
@@ -100,17 +116,126 @@ func loaddata(f *os.File) (T tableau) {
 		scanner.Scan()
 		text = scanner.Text()
 	}
-	return T
+	Tab = buildTableauFromLoadedData(T)
+	PrintTableau(Tab, 0)
+	return Tab
 }
 
-func calctemp(temp []float64, a [][]float64, c []float64, basic []int, n, m int) {
-	var i, j int
-	for i = 0; i < n+m; i++ {
-		temp[i] = 0
-		for j = 0; j < m; j++ {
-			temp[i] = temp[i] + c[basic[j]]*a[j][i]
+func buildTableauFromLoadedData(T tableau) (Tab modernTableau) {
+	Tab.n = T.n
+	Tab.m = T.m
+	Tab.nm = T.nm
+	matCols := T.nm + 1
+	matRows := T.m + 1
+	Tab.Mat = make([][]float64, matRows)
+	for i := 0; i < matRows; i++ {
+		Tab.Mat[i] = make([]float64, matCols)
+	}
+	Tab.basic = make([]int, T.m)
+	// Fill in Mat with Aij
+	for i := 0; i < Tab.m; i++ {
+		for j := 0; j < Tab.nm; j++ {
+			Tab.Mat[i][j] = T.A[i][j]
 		}
-		temp[i] = temp[i] - c[i]
+		Tab.Mat[i][Tab.nm] = T.b[i]
+	}
+	for j := 0; j < Tab.nm; j++ {
+		Tab.Mat[Tab.m][j] = -T.c[j]
+	}
+	for i := 0; i < Tab.m; i++ {
+		Tab.basic[i] = Tab.n + i
+	}
+	return Tab
+}
+
+func (T modernTableau) ObjMostNegativeCoefficient() int {
+	minj := -1
+	min := 10.0
+	for j := 0; j < T.nm; j++ {
+		val := T.Mat[T.m][j]
+		if val < 0 && val < min {
+			min = val
+			minj = j
+		}
+	}
+	return minj
+}
+func (T modernTableau) MinRatioTest(column int) int {
+	var minratio float64
+	minrow := -1
+	for i := 0; i < T.m; i++ {
+		aval := T.Mat[i][column]
+		if aval > 0 {
+			ratio := T.Mat[i][T.nm] / aval
+			if ratio < minratio || minrow < 0 {
+				minratio = ratio
+				minrow = i
+			}
+		}
+	}
+	return minrow
+}
+func (T modernTableau) pivot(row, col int) {
+	T.basic[row] = col // FIXME is this true for dual as well as primal?
+	key := T.Mat[row][col]
+	if key == 1.0 {
+		fmt.Printf("**** Pivit value is 1.0! No need to multiply PivRow %d\n", row+1)
+	}
+	for j := 0; j <= T.nm; j++ {
+		T.Mat[row][j] = T.Mat[row][j] / key
+	}
+	for i := 0; i <= T.m; i++ {
+		if row == i {
+			continue
+		}
+		key = T.Mat[i][col]
+		if key == 0.0 {
+			fmt.Printf("**** Non-Pivit value is 0.0! No need to multiply Non-PivRow %d\n", i+1)
+		}
+		for j := 0; j <= T.nm; j++ {
+			T.Mat[i][j] = T.Mat[i][j] - T.Mat[row][j]*key
+		}
+	}
+}
+
+func PrintTableau(T modernTableau, itr int) {
+	fmt.Printf("\n============= Iteration %d ================\n", itr)
+	fmt.Printf("%10s", "Basic")
+	for j := 0; j < T.nm; j++ {
+		s := fmt.Sprintf("x%d", j+1)
+		fmt.Printf("%10s", s) // Xi start at 1 not zero
+	}
+	fmt.Printf("%10s\n", "b") // bi start at 1 not zero
+	for j := 0; j < T.nm+2; j++ {
+		fmt.Printf("%10s", "----------")
+	}
+	fmt.Printf("\n")
+	for i := 0; i < T.m; i++ {
+		s := fmt.Sprintf("x%d", T.basic[i]+1)
+		fmt.Printf("%10s", s) // var start at 1 not zero
+		for j := 0; j < T.nm; j++ {
+			fmt.Printf("%10.2f", T.Mat[i][j]) // Aij
+		}
+		fmt.Printf("%10.2f\n", T.Mat[i][T.nm]) // bi
+	}
+	fmt.Printf("%10s", "obj (z)") // no basic in object row
+	for j := 0; j < T.nm; j++ {
+		fmt.Printf("%10.2f", T.Mat[T.m][j]) // Cj
+	}
+	fmt.Printf("%10.2f", T.Mat[T.m][T.nm]) // z
+	fmt.Printf(" <= Max(z)\n")
+}
+
+func calctemp(T tableau) {
+	// calc zi, needed for _Zj-Cj.go codes
+	// see page 80 of Introduction to Management Science by Thomas Cook 2Ed
+	var i, j int
+	for i = 0; i < T.nm; i++ {
+		T.temp[i] = 0
+		for j = 0; j < T.m; j++ {
+			T.temp[i] = T.temp[i] + T.c[T.basic[j]]*T.A[j][i]
+		}
+		T.temp[i] = T.temp[i] - T.c[i]
 	}
 }
 
@@ -184,7 +309,7 @@ func display(T tableau) {
 
 func displayframe(c []float64, nm int) {
 	var i int
-	fmt.Printf("\t\tc[j]\t")
+	fmt.Printf("\n\t\tc[j]\t")
 	for i = 0; i < nm; i++ {
 		fmt.Printf("%0.2g\t", c[i])
 	}
