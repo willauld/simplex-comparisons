@@ -21,16 +21,11 @@ type modernTableau struct {
 	Mat [][]float64 // (m+1) x (nm +1) matrix
 	// columns + 1 for RHS / bi values
 	// row + 1 for object function
-	basic []int // m basic variables
-	n     int   // number of variable given
-	m     int   // number of constraints given
-	nm    int   // number of variables including slack / surplus variables
-}
-
-func (m modernTableau) c(index int) float64 {
-	// TODO convert the current tableau to single matrix
-	// with access methods for convienience and readability
-	return 0.0
+	basic []int  // m basic variables
+	n     int    // number of variable given
+	m     int    // number of constraints given
+	nm    int    // number of variables including slack / surplus variables
+	zstr  string // the z or -z to be printed with the tableau
 }
 
 func loaddata(f *os.File) (Tab modernTableau) {
@@ -44,12 +39,16 @@ func loaddata(f *os.File) (Tab modernTableau) {
 	scanner := bufio.NewScanner(f)
 	/*** Input requisite amount of data ***/
 
-	fmt.Printf("\nEnter number of terms in objective function\n")
+	if waitforuser {
+		fmt.Printf("\nEnter number of terms in objective function\n")
+	}
 	scanner.Scan()
 	text := scanner.Text()
 	n, _ := strconv.ParseInt(text, 10, 32)
 	T.n = int(n)
-	fmt.Printf("\nEnter number of constraints\n")
+	if waitforuser {
+		fmt.Printf("\nEnter number of constraints\n")
+	}
 	scanner.Scan()
 	text = scanner.Text()
 	m, _ := strconv.ParseInt(text, 10, 32)
@@ -65,7 +64,9 @@ func loaddata(f *os.File) (Tab modernTableau) {
 		T.A[i] = make([]float64, T.nm)
 	}
 
-	fmt.Printf("\nEnter the object function co-efficients\n")
+	if waitforuser {
+		fmt.Printf("\nEnter the object function co-efficients\n")
+	}
 	for i = 0; i < T.n; i++ {
 		scanner.Scan()
 		text = scanner.Text()
@@ -80,7 +81,9 @@ func loaddata(f *os.File) (Tab modernTableau) {
 			fmt.Printf(" + %g*x%d", T.c[i], i+1)
 		}
 	}
-	fmt.Printf("\nEnter the co-efficient of constraints\n")
+	if waitforuser {
+		fmt.Printf("\nEnter the co-efficient of constraints\n")
+	}
 	for i = 0; i < T.m; i++ {
 		for j = 0; j < T.n; j++ {
 			scanner.Scan()
@@ -92,7 +95,9 @@ func loaddata(f *os.File) (Tab modernTableau) {
 		T.A[i][j] = 1
 		j++
 	}
-	fmt.Printf("\nEnter values of bi's\n")
+	if waitforuser {
+		fmt.Printf("\nEnter values of bi's\n")
+	}
 	for i = 0; i < T.m; i++ {
 		scanner.Scan()
 		text = scanner.Text()
@@ -117,7 +122,7 @@ func loaddata(f *os.File) (Tab modernTableau) {
 		text = scanner.Text()
 	}
 	Tab = buildTableauFromLoadedData(T)
-	PrintTableau(Tab, 0)
+	//PrintTableau(Tab, 0)
 	return Tab
 }
 
@@ -145,10 +150,29 @@ func buildTableauFromLoadedData(T tableau) (Tab modernTableau) {
 	for i := 0; i < Tab.m; i++ {
 		Tab.basic[i] = Tab.n + i
 	}
+	Tab.zstr = "z"
 	return Tab
 }
 
-func (T modernTableau) ObjMostNegativeCoefficient() int {
+func (T *modernTableau) setUseNegitiveZ() {
+	// force z to -z
+	for j := 0; j <= T.nm; j++ {
+		T.Mat[T.m][j] = -T.Mat[T.m][j]
+	}
+	T.zstr = "-z"
+}
+
+func (T *modernTableau) getAnswerVector() []float64 {
+	X := make([]float64, T.nm+1)
+	for i := 0; i < T.m; i++ {
+		basici := T.basic[i]
+		X[basici+1] = T.Mat[i][T.nm]
+	}
+	X[0] = T.Mat[T.m][T.nm]
+	return X
+}
+
+func (T *modernTableau) ObjMostNegativeCoefficient() int {
 	minj := -1
 	min := 10.0
 	for j := 0; j < T.nm; j++ {
@@ -160,7 +184,7 @@ func (T modernTableau) ObjMostNegativeCoefficient() int {
 	}
 	return minj
 }
-func (T modernTableau) MinRatioTest(column int) int {
+func (T *modernTableau) MinRatioTest(column int) int {
 	var minratio float64
 	minrow := -1
 	for i := 0; i < T.m; i++ {
@@ -175,7 +199,50 @@ func (T modernTableau) MinRatioTest(column int) int {
 	}
 	return minrow
 }
-func (T modernTableau) pivot(row, col int) {
+
+func (T *modernTableau) RHSMinBLessThanZero() int {
+	minrow := -1
+	min := 0.0
+	for i := 0; i < T.m; i++ {
+		bi := T.Mat[i][T.nm]
+		if bi < 0 {
+			if bi < min {
+				min = bi
+				minrow = i
+			}
+
+		}
+	}
+	return minrow
+}
+
+func (T *modernTableau) ObjFuncMinRatio(row int) int {
+	mincol := -1
+	min := 0.0
+	for j := 0; j < T.nm; j++ {
+		// check that Xj is not already basic
+		jAlreadyBasic := false
+		for i := 0; i < T.m; i++ {
+			if T.basic[i] == j {
+				jAlreadyBasic = true
+				break
+			}
+		}
+		if !jAlreadyBasic {
+			aij := T.Mat[row][j]
+			if aij < 0 {
+				ratio := T.Mat[T.m][j] / aij
+				if ratio < min || mincol < 0 {
+					min = ratio
+					mincol = j
+				}
+			}
+		}
+	}
+	return mincol
+}
+
+func (T *modernTableau) pivot(row, col int) {
 	T.basic[row] = col // FIXME is this true for dual as well as primal?
 	key := T.Mat[row][col]
 	if key == 1.0 {
@@ -218,105 +285,15 @@ func PrintTableau(T modernTableau, itr int) {
 		}
 		fmt.Printf("%10.2f\n", T.Mat[i][T.nm]) // bi
 	}
-	fmt.Printf("%10s", "obj (z)") // no basic in object row
+	for j := 0; j < T.nm+2; j++ {
+		fmt.Printf("%10s", "----------")
+	}
+	fmt.Printf("\n")
+	s := fmt.Sprintf("obj (%s)", T.zstr)
+	fmt.Printf("%10s", s) // no basic in object row
 	for j := 0; j < T.nm; j++ {
 		fmt.Printf("%10.2f", T.Mat[T.m][j]) // Cj
 	}
 	fmt.Printf("%10.2f", T.Mat[T.m][T.nm]) // z
-	fmt.Printf(" <= Max(z)\n")
-}
-
-func calctemp(T tableau) {
-	// calc zi, needed for _Zj-Cj.go codes
-	// see page 80 of Introduction to Management Science by Thomas Cook 2Ed
-	var i, j int
-	for i = 0; i < T.nm; i++ {
-		T.temp[i] = 0
-		for j = 0; j < T.m; j++ {
-			T.temp[i] = T.temp[i] + T.c[T.basic[j]]*T.A[j][i]
-		}
-		T.temp[i] = T.temp[i] - T.c[i]
-	}
-}
-
-func maximum(arr []float64, arrmaxpos *int, n int) {
-	var i int
-	var arrmax float64
-	arrmax = arr[0]
-	*arrmaxpos = 0
-	for i = 0; i < n; i++ {
-		if arr[i] > arrmax {
-			arrmax = arr[i]
-			*arrmaxpos = i
-		}
-	}
-}
-
-func minimum(arr []float64, arrminpos *int, n int) {
-	var i int
-	var arrmin float64
-	arrmin = arr[0]
-	*arrminpos = 0
-	for i = 0; i < n; i++ {
-		if arr[i] < arrmin {
-			arrmin = arr[i]
-			*arrminpos = i
-		}
-	}
-}
-
-func pivot(T tableau, row, col int) {
-
-	key := T.A[row][col]
-	if key == 1.0 {
-		fmt.Printf("**** Pivit value is 1.0! No need to multiply PivRow\n")
-	}
-	T.b[row] = T.b[row] / key
-	for i := 0; i < T.nm; i++ {
-		T.A[row][i] = T.A[row][i] / key
-	}
-	for i := 0; i < T.m; i++ {
-		if row == i {
-			continue
-		}
-		key = T.A[i][col]
-		if key == 0.0 {
-			fmt.Printf("**** Non-Pivit value is 0.0! No need to multiply Non-PivRow\n")
-		}
-		for j := 0; j < T.nm; j++ {
-			T.A[i][j] = T.A[i][j] - T.A[row][j]*key
-		}
-		T.b[i] = T.b[i] - T.b[row]*key
-	}
-}
-
-func display(T tableau) {
-	var i, j int
-	displayframe(T.c, T.nm)
-	for i = 0; i < T.m; i++ {
-		fmt.Printf("\n%0.3g\tX%d\t%0.3g\t", T.c[T.basic[i]], T.basic[i]+1, T.b[i])
-		for j = 0; j < T.nm; j++ {
-			fmt.Printf("%0.3g\t", T.A[i][j])
-		}
-		fmt.Printf("\n")
-	}
-	fmt.Printf("\n\tZj-Cj\t\t")
-	for i = 0; i < T.nm; i++ {
-		fmt.Printf("%0.3g\t", T.temp[i])
-	}
-	fmt.Printf("\n\n")
-}
-
-func displayframe(c []float64, nm int) {
-	var i int
-	fmt.Printf("\n\t\tc[j]\t")
-	for i = 0; i < nm; i++ {
-		fmt.Printf("%0.2g\t", c[i])
-	}
-	fmt.Printf("\n")
-	fmt.Printf("\nc[B]\tB\tb\t")
-	for i = 0; i < nm; i++ {
-		fmt.Printf("a[%d]\t", i+1)
-	}
-	fmt.Printf("\n")
+	fmt.Printf(" <= Max(%s)\n", T.zstr)
 }

@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-/****************************************************/
+/***************************************************/
 /***** Solves the LPP by Primal Simplex method *****/
 /***************************************************/
 
@@ -23,6 +23,7 @@ func dosimplex(T modernTableau, f *os.File) {
 	}
 
 	/*** Calculation for actual table ***/
+	PrintTableau(T, 0)
 	for flag == 0 {
 		/*** Determining the incoming variable / column ***/
 		colOfEnteringVar = T.ObjMostNegativeCoefficient()
@@ -49,8 +50,8 @@ func dosimplex(T modernTableau, f *os.File) {
 			scanner.Scan()
 		}
 	}
-	fmt.Printf("\nPress any key to exit...\n")
 	if waitforuser {
+		fmt.Printf("\nPress any key to exit...\n")
 		scanner.Scan()
 	}
 }

@@ -17,18 +17,8 @@ type tableau struct {
 	basic    []int
 	n, m, nm int
 }
-type modernTableau struct {
-	Mat      [][]float64
-	n, m, nm int
-}
 
-func (m modernTableau) c(index int) float64 {
-	// TODO convert the current tableau to single matrix
-	// with access methods for convienience and readability
-	return 0.0
-}
-
-func loaddata(f *os.File) (T tableau) {
+func loaddata(f *os.File) (Tab tableau) {
 	var i, j int
 
 	waitforuser := false
